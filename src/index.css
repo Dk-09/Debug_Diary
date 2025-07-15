@@ -5,7 +5,7 @@
 
 @font-face {
   font-family: "Monument";
-  src: url("./fonts/MonumentExtended-Regular.otf") format('truetype');
+  src: url("/fonts/MonumentExtended-Regular.otf") format('opentype');
 }
 
 *{
