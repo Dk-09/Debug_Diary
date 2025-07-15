@@ -2,6 +2,7 @@ import { createRoot } from "react-dom/client";
 import { HeroUIProvider } from "@heroui/react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider, useTheme } from "./Context/ThemeContext";
+import { Analytics } from "@vercel/analytics/react"
 
 import App from "./App.jsx";
 import Blog from "./Pages/Blog.jsx";
@@ -31,6 +32,7 @@ createRoot(document.getElementById("root")).render(
       <HeroUIProvider>
         <BrowserRouter>
           <ThemedAppWrapper />
+          <Analytics />
         </BrowserRouter>
       </HeroUIProvider>
     </ThemeProvider>
