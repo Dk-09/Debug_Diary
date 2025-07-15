@@ -1,0 +1,202 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+@font-face {
+  font-family: "Monument";
+  src: url("./fonts/MonumentExtended-Regular.otf") format('truetype');
+}
+
+*{
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+.callout {
+  background-color: #1e1e1e;
+  border-left: 4px solid #007acc;
+  padding: 1rem;
+  margin: 1.5rem 0;
+  border-radius: 0.5rem;
+  font-style: italic;
+  color: #ccc;
+}
+
+/* Container */
+.post-container {
+  padding: 2rem 1rem;
+  color: #1a1a1a;
+  font-family: 'Fira Sans', sans-serif;
+  line-height: 1.8;
+}
+
+.dark .post-container {
+  color: #d1d5db;
+}
+
+/* Headings (vibrant & unique) */
+.post-container h1 {
+  font-size: 2.5rem;
+  font-weight: 800;
+  color: #dc2626; /* red-600 */
+  margin: 2rem 0 1rem;
+}
+
+.post-container h2 {
+  font-size: 2.1rem;
+  font-weight: 700;
+  color: #ca8a04; /* amber-600 */
+  margin: 1.8rem 0 1rem;
+}
+
+.post-container h3 {
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: #16a34a; /* green-600 */
+  margin: 1.5rem 0 1rem;
+}
+
+.post-container h4 {
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: #0ea5e9; /* sky-500 */
+  margin: 1.2rem 0 0.8rem;
+}
+
+.post-container h5 {
+  font-size: 1.2rem;
+  font-weight: 500;
+  color: #7c3aed; /* violet-600 */
+  margin: 1rem 0 0.6rem;
+}
+
+.post-container h6 {
+  font-size: 1rem;
+  font-weight: 500;
+  color: #db2777; /* pink-600 */
+  margin: 1rem 0 0.5rem;
+}
+
+.dark .post-container h1 { color: #f87171; }
+.dark .post-container h2 { color: #facc15; }
+.dark .post-container h3 { color: #4ade80; }
+.dark .post-container h4 { color: #7dd3fc; }
+.dark .post-container h5 { color: #c4b5fd; }
+.dark .post-container h6 { color: #f472b6; }
+
+/* Paragraphs */
+.post-container p {
+  font-size: 1.05rem;
+  margin: 0.8rem 0;
+}
+
+/* ✅ Inline code: clean style */
+.post-container p code,
+.post-container li code,
+.post-container blockquote code {
+  background-color: #1e293b; /* slate-800 */
+  color: #f8fafc; /* light text */
+  font-family: 'Fira Code', monospace;
+  font-size: 0.95rem;
+  padding: 0.2em 0.4em;
+  border-radius: 4px;
+  white-space: pre-wrap;
+}
+
+.post-container code::before,
+.post-container code::after {
+  content: "";
+}
+
+/* Dark mode — same */
+.dark .post-container code {
+  background-color: #334155; /* slate-700 */
+  color: #e2e8f0;
+}
+
+/* ✅ No background for multiline code */
+.post-container pre code {
+  background: none !important;
+  padding: 0;
+  border-radius: 0;
+  font-size: 1rem;
+}
+
+/* Lists */
+.post-container ul,
+.post-container ol {
+  padding-left: 2rem;
+  margin: 1rem 0;
+}
+
+.post-container li {
+  margin-bottom: 0.5rem;
+}
+
+/* ✅ Blockquotes — sky blue only here */
+.post-container blockquote {
+  padding: 1rem;
+  margin: 1.5rem 0;
+  background: #e0f2fe;
+  border-left: 4px solid #0284c7;
+  font-style: italic;
+  color: #075985;
+  border-radius: 0.375rem;
+}
+
+.dark .post-container blockquote {
+  background: #0c4a6e;
+  border-left-color: #7dd3fc;
+  color: #e0f2fe;
+}
+
+/* Tables */
+.post-container table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 2rem 0;
+}
+
+.post-container th,
+.post-container td {
+  border: 1px solid #e5e7eb;
+  padding: 0.75rem;
+}
+
+.dark .post-container th,
+.dark .post-container td {
+  border-color: #374151;
+}
+
+/* ✅ Bold text (strong) */
+.post-container strong {
+  font-weight: 700;
+  color: #dc2626; /* red-600 */
+}
+
+.dark .post-container strong {
+  color: #f87171;
+}
+
+/* ✅ Italic */
+.post-container em {
+  font-style: italic;
+  color: #84cc16; /* lime-500 (soft) */
+}
+
+.dark .post-container em {
+  color: #a3e635; /* lime-400, gentle glow in dark mode */
+}
+
+
+/* ✅ Links — blue with underline, no bg */
+.post-container a {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+.dark .post-container a {
+  color: #60a5fa;
+}

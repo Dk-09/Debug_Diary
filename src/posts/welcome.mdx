@@ -1,0 +1,174 @@
+
+> Welcome
+> As with growing technology and decreasing attention span i have decided, someone had to take care of what's little left of your little brain...
+> I am not going to repeat things a lot so please DIY if you want to improve
+
+# Prerequisites
+If you're a beginner, go learn `C` or something.  
+You're back already? Fine. Go read the basics of the following, or ask your AI waifu ChatGPT to explain them to you in a cute voice:
+
+1. Windows API
+2. Windows Datatype
+3. pointers - come back when you can read `char *(*(*fptr[3])())();`
+4. PE structure
+5. DLL (Don't Laugh Looser)
+6. Payloads, Loaders, Shellcode & Execution Flow
+
+### Shellcode
+Shellcode isn’t someone like _you_ — let's understand what it actually is.
+![your internet sucks image not loaded](/images/welcome-1.png)
+shellcode is **not dependent** on external address or header files as it's not compiled like an typical c/cpp language.
+
+we will be using the following command to generate shellcode via [msfvenom](https://www.offsec.com/metasploit-unleashed/msfvenom/) 
+```bash
+msfvenom -p windows/x64/exec CMD=clac.exe -f c
+
+output - "0xFC 0x48..0x00"
+```
+Yeah — we'll be spawning _Calculator_ with shellcode for the first few examples.
+
+### X64dbg
+x64dbg is a tool that can help you find see how your program works behind the scene on the computer. Great for understanding execution flow, breaking stuff, and fixing errors.
+
+1. How to open it: just double-click, genius
+2. Attach an process - Alt + A to bring the attach window
+3. Select the process that you want to attach and double click it
+![your internet sucks image not loaded](/images/welcome-2.png)
+
+# Payload Injection
+Payload injection is a technique to embed malicious code into a process. ideally without triggering AV. Usually, it’s injected into legit processes like `notepad.exe`, `browser.exe`, `yourmomthick.exe`, etc.
+
+Here is an basic intro for sextions in PE file 
+1. .DATA - stores the global and static variables
+2. .RDATA - stores the read only data that can't be changed during runtime. ex - const initialized data
+3. .TEXT - stores the logic or code of the whole program
+4. .RSRC - stores resource like image, icon etc.
+
+## .DATA section
+Now we will write an `C` program in **VS studio 2022** (recommended) to inject shellcode into our own `.data` section, then debug using *x64dbg*
+
+```c
+#include <windows.h>
+#include <stdio.h>
+
+unsigned char buffer[]=
+"\xfc\x48\x83\xe4\xf0\xe8\xc0\x00\x00\x00\x41\x51\x41\x50"
+// I am not ging your the whole shellcode generate it yourself lazy ass
+"\xd5\x63\x61\x6c\x63\x2e\x65\x78\x65\x00";
+
+int main() {
+	printf("[+] Location - %p", &buffer);
+	getch(); // press anykey to end the program
+	return 0;
+}
+```
+
+1. Run the program and copy the printed address
+2. In x64dbg, press `CTRL + G` and paste that address
+3. Your brain should now connect the dots — the shellcode is stored at that location and visible in the top-right variable view
+
+![your internet sucks image not loaded](/images/welcome-3.png)
+
+## .RDATA section
+`.rdata` is for data that can't be modified at runtime, so we must use `const` for the payload.
+
+```c
+#include <windows.h>
+#include <stdio.h>
+
+const unsigned char buffer[]=
+"\xfc\x48\x83\xe4\xf0\xe8\xc0\x00\x00\x00\x41\x51\x41\x50"
+// I am not ging your the whole shellcode generate it yourself lazy ass
+"\xd5\x63\x61\x6c\x63\x2e\x65\x78\x65\x00";
+
+int main() {
+	printf("[+] Location - %p", &buffer);
+	getch(); // press anykey to end the program
+	return 0;
+}
+```
+
+*Now now don't be lazy and do the debugging your self.*
+
+## .TEXT section
+This is where the actual code lives. But it’s tricky — you can’t just store data here easily, and there’s usually not much spare space. Not the best choice for payloads, but still possible: 
+
+```c
+#include <windows.h>
+#include <stdio.h>
+#pragma section(".text") // used to change permission of section 
+
+//we are using .text section to store the variable buffer
+__declspec(allocate(".text")) const unsigned char buffer[]=
+"\xfc\x48\x83\xe4\xf0\xe8\xc0\x00\x00\x00\x41\x51\x41\x50"
+// I am not ging your the whole shellcode generate it yourself lazy ass
+"\xd5\x63\x61\x6c\x63\x2e\x65\x78\x65\x00";
+
+int main() {
+	printf("[+] Location - %p", &buffer);
+	getch(); // press anykey to end the program
+	return 0;
+}
+```
+
+*Now now don't be lazy and do the debugging your self.*
+
+## .RSRC section
+`.rsrc` section contain all the resources of the files like icons, wave files etc. This is the perfect place to hide an payload and also an bit lengthy one.
+
+I'll be using vs studio to do this you can do it by MinGW also. Follow the following step 
+
+- First make an file `payload.bin` and put shellcode in there (hope u remember what's *shellcode*)
+- Add a **resource file** like shown below. you’ll need to do this **twice** (first time it creates `resource.h` and `<project>.rc`)
+
+![your internet sucks image not loaded](/images/welcome-4.png)
+
+- Now it will allow you to import that payload, just first select any of the options menu, icon etc and then click import and import the `payload.bin` file
+
+![your internet sucks image not loaded](/images/welcome-5.png)
+
+- this is the final step where you have to specify what type of data does the file hold, we will type RCDATA which mean raw binary 
+
+![your internet sucks image not loaded](/images/welcome-6.png)
+
+- There is this `resources.h` file, have a look at it. it maps all the resources in the project and assigns a number to them which will be useful when we want to access the resource 
+
+Now to actually _access_ that payload, we need to use some WinAPI magic:
+- `FindResourceW`
+- `LoadResource`
+- `LockResource`
+- `SizeofResource`
+
+Go read about them on MSDN — write your own code if you’re serious. But if you get stuck maybe i as your stepbrother will come to save you
+
+```c
+#include <windows.h>
+#include <stdio.h>
+#include "resource.h"
+
+void RsrcSectionPayload() {
+	HRSRC HandleForResource;
+	HGLOBAL RetrieveHandle;
+	LPVOID AddressOfResource;
+	DWORD size;
+	LPVOID TempBuffer;
+
+	HandleForResource = FindResourceW(NULL,MAKEINTRESOURCE(IDR_RCDATA1), RT_RCDATA);
+	RetrieveHandle = LoadResource(NULL, HandleForResource);
+	AddressOfResource = LockResource(RetrieveHandle);
+	size = SizeofResource(NULL, HandleForResource);
+
+	printf("Address of Resource = %p\n", AddressOfResource);
+	TempBuffer = malloc(size);
+	memcpy(TempBuffer, AddressOfResource, size);
+	printf("\nAddress of Resource in the Buffer = %p", TempBuffer);
+	getch();
+}
+```
+
+*Now now don't be lazy and do the debugging your self.*
+
+## Final Words
+
+Yeah yeah, I know your brain hurts — mine did too while writing this.  
+See you next time with more malware dev chaos. 💀
