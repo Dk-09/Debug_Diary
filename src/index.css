@@ -79,12 +79,12 @@
   margin: 1rem 0 0.5rem;
 }
 
-.dark .post-container h1 { color: #f87171; }
-.dark .post-container h2 { color: #facc15; }
-.dark .post-container h3 { color: #4ade80; }
-.dark .post-container h4 { color: #7dd3fc; }
-.dark .post-container h5 { color: #c4b5fd; }
-.dark .post-container h6 { color: #f472b6; }
+.dark .post-container h1 { color: #7dd3fc; }
+.dark .post-container h2 { color: #c4b5fd; }
+.dark .post-container h3 { color: #f472b6; }
+.dark .post-container h4 { color: #f87171; }
+.dark .post-container h5 { color: #4ade80; }
+.dark .post-container h6 { color: #facc15; }
 
 /* Paragraphs */
 .post-container p {

