@@ -1,8 +1,17 @@
 export const blogPosts = {
   
-  "Malware Development": [    
+  "Malware Development": [
     {
-      id: "Payload Encryption",
+      id: "Payload_Obfuscation",
+      date: "2025-07-31",
+      title: "Payload Obfuscation",
+      description: "Disguise payloads using stealth formats.",
+      image: "./images/PayloadObfuscation.jpg",
+      markdown: "../posts/PayloadObfuscation.mdx",      
+      tag: ["Payload Obfuscation", "IPv4/v6", "MAC", "UUID"]
+    },
+    {
+      id: "Payload_Encryption",
       date: "2025-07-21",
       title: "Payload Encryption",
       description: "Understanding and implementing payload enc.",

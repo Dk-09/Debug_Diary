@@ -26,12 +26,12 @@ export default function Blog() {
       <NavForBlog to={"/"} />
 
       <Tabs
-        aria-label="Blog Categories"
-        color="primary"
-        variant="bordered"
-        selectedKey={activeTab}
-        onSelectionChange={(key) => setActiveTab(key)}
-        className="justify-center px-10 py-6"
+          aria-label="Blog Categories"
+          color="primary"
+          variant="bordered"
+          selectedKey={activeTab}
+          onSelectionChange={(key) => setActiveTab(key)}
+          className="justify-center px-10 py-6"
       >
         <Tab
           key="Malware Development"
@@ -51,7 +51,7 @@ export default function Blog() {
             </div>
           }
         /> */}
-        <Tab
+        {/* <Tab
           key="Write ups"
           title={
             <div className="flex items-center space-x-2 sm:text-xl">
@@ -59,7 +59,7 @@ export default function Blog() {
               <span>Write ups</span>
             </div>
           }
-        />
+        /> */}
       </Tabs>
 
       {/* Cards */}
