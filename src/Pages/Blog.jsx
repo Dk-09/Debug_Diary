@@ -10,16 +10,22 @@ export default function Blog() {
 
   const filteredPosts = blogPosts[activeTab] || [];
 
-  // Get latest date from Malware Development posts
   const latestMalwarePostId = useMemo(() => {
-    const malwarePosts = blogPosts["Malware Development"];
-    if (!malwarePosts || malwarePosts.length === 0) return null;
+  const malwarePosts = blogPosts["Malware Development"];
+  if (!malwarePosts || !malwarePosts.length) return null;
 
-    const latest = malwarePosts.reduce((a, b) =>
-      new Date(a.date) > new Date(b.date) ? a : b
-    );
-    return latest.id;
-  }, []);
+  const latest = malwarePosts.reduce((a, b) => {
+    const da = new Date(a.date), db = new Date(b.date);
+    console.log(`Comparing ${a.date} vs ${b.date}: ${da > db ? a.id : b.id} is later`);
+    if (isNaN(da)) return b;
+    if (isNaN(db)) return a;
+    return da > db ? a : b;
+  });
+
+  console.log(`Latest post: ID=${latest.id}, Date=${latest.date}`);
+  return latest.id;
+}, [blogPosts]);
+
 
   return (
     <div className="h-screen w-full flex flex-col">

