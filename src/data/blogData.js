@@ -4,7 +4,7 @@ export const blogPosts = {
     {
       id: "Process_Injection",
       date: "2025-08-14",
-      title: "Executing Payload",
+      title: "Process Injection",
       description: "Forcing other processes to run our malicious code",
       image: "./images/Process_Injection.jpg",
       markdown: "../posts/Process_Injection.mdx",      
